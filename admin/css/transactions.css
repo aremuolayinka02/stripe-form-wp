@@ -1,0 +1,12 @@
+#transaction-filters {
+    margin-bottom: 20px;
+}
+
+#transaction-filters select,
+#transaction-filters input {
+    margin-right: 10px;
+}
+
+#transactions-table {
+    margin-top: 20px;
+}

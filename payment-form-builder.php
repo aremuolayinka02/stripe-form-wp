@@ -25,13 +25,17 @@ class Payment_Form_Builder {
             // Define constants
             $this->define_constants();
 
+            // Require dependencies after constants are defined
+            require_once PFB_PLUGIN_DIR . 'includes/class-install.php';
+            require_once PFB_PLUGIN_DIR . 'admin/class-transactions.php';
+
             // Check requirements before proceeding
             if (!$this->check_requirements()) {
                 return;
             }
 
             // Add activation hook
-            register_activation_hook(__FILE__, array($this, 'activate'));
+            register_activation_hook(__FILE__, array('Stripe_Form_Install', 'install'));
             
             // Add deactivation hook
             register_deactivation_hook(__FILE__, array($this, 'deactivate'));
@@ -122,6 +126,7 @@ class Payment_Form_Builder {
         $charset_collate = $wpdb->get_charset_collate();
 
         try {
+            // Create submissions table
             $table_name = $wpdb->prefix . 'pfb_submissions';
             
             // Check if table exists
@@ -149,6 +154,40 @@ class Payment_Form_Builder {
                 if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") != $table_name) {
                     throw new Exception('Failed to create database table.');
                 }
+            }
+
+            // Create transactions table
+            $transactions_table = $wpdb->prefix . 'stripe_transactions';
+            
+            // Drop the existing table if it exists but has wrong structure
+            $wpdb->query("DROP TABLE IF EXISTS $transactions_table");
+            
+            $sql = "CREATE TABLE $transactions_table (
+                id bigint(20) NOT NULL AUTO_INCREMENT,
+                form_id bigint(20) NOT NULL,
+                transaction_id varchar(255) NOT NULL,
+                amount decimal(10,2) NOT NULL,
+                currency varchar(3) NOT NULL,
+                status varchar(50) NOT NULL,
+                mode varchar(10) NOT NULL,
+                customer_email varchar(255),
+                customer_name varchar(255),
+                payment_method varchar(50),
+                created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                metadata longtext,
+                PRIMARY KEY  (id),
+                KEY transaction_id (transaction_id),
+                KEY form_id (form_id),
+                KEY mode (mode),
+                KEY created_at (created_at)
+            ) $charset_collate;";
+
+            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            dbDelta($sql);
+
+            // Verify table exists
+            if ($wpdb->get_var("SHOW TABLES LIKE '$transactions_table'") != $transactions_table) {
+                throw new Exception('Failed to create transactions table.');
             }
         } catch (Exception $e) {
             error_log('Payment Form Builder table creation error: ' . $e->getMessage());
