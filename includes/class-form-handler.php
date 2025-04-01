@@ -55,6 +55,11 @@ class PFB_Form_Handler
                 case 'payment_intent.succeeded':
                     $payment_intent = $event->data->object;
                     $this->record_transaction($payment_intent);
+                    $this->update_submission_status($payment_intent->id, 'completed');
+                    break;
+                case 'payment_intent.payment_failed':
+                    $payment_intent = $event->data->object;
+                    $this->update_submission_status($payment_intent->id, 'failed');
                     break;
                 default:
                     error_log('Unhandled event type: ' . $event->type);
@@ -71,6 +76,29 @@ class PFB_Form_Handler
             error_log('Webhook error: ' . $e->getMessage());
             return new WP_Error('webhook_error', $e->getMessage(), array('status' => 500));
         }
+    }
+
+    private function update_submission_status($payment_intent_id, $status)
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $wpdb->prefix . 'pfb_submissions',
+            array(
+                'payment_status' => $status,
+                'updated_at' => current_time('mysql')
+            ),
+            array('payment_intent' => $payment_intent_id),
+            array('%s', '%s'),
+            array('%s')
+        );
+
+        if ($result === false) {
+            error_log('Failed to update submission status: ' . $wpdb->last_error);
+            return false;
+        }
+
+        return true;
     }
 
 
@@ -171,13 +199,13 @@ class PFB_Form_Handler
             $payment_intent = $this->stripe->create_payment_intent($amount, $currency, $form_id);
 
             if (is_wp_error($payment_intent)) {
-        error_log('Stripe error: ' . $payment_intent->get_error_message());
-        wp_send_json_error($payment_intent->get_error_message());
-        return;
-    }
+                error_log('Stripe error: ' . $payment_intent->get_error_message());
+                wp_send_json_error($payment_intent->get_error_message());
+                return;
+            }
 
             // Store form submission
-            $submission_id = $this->store_submission($form_id, $form_data);
+            $submission_id = $this->store_submission($form_id, $form_data, $payment_intent->id);
 
             wp_send_json_success(array(
                 'client_secret' => $payment_intent->client_secret,
@@ -189,7 +217,7 @@ class PFB_Form_Handler
         }
     }
 
-    private function store_submission($form_id, $form_data)
+    private function store_submission($form_id, $form_data, $payment_intent_id = '')
     {
         global $wpdb;
 
@@ -199,9 +227,10 @@ class PFB_Form_Handler
                 'form_id' => $form_id,
                 'submission_data' => json_encode($form_data),
                 'payment_status' => 'pending',
+                'payment_intent' => $payment_intent_id,
                 'created_at' => current_time('mysql')
             ),
-            array('%d', '%s', '%s', '%s')
+            array('%d', '%s', '%s', '%s', '%s')
         );
 
         return $wpdb->insert_id;
