@@ -10,15 +10,13 @@ class Stripe_Form_Transactions {
     }
 
     public function add_transactions_page() {
-        add_menu_page(
-            'Transactions',
-            'Transactions',
-            'manage_options',
-            'stripe-transactions',
-            array( $this, 'render_transactions_page' ),
-            'dashicons-list-view',
-            25
-        );
+        add_submenu_page(
+        'edit.php?post_type=payment_form',  
+        'Transactions',                     
+        'Transactions',                    
+        'manage_options',                  
+        'stripe-transactions',                      
+        array( $this, 'render_transactions_page' )        );
     }
 
     public function render_transactions_page() {
@@ -105,5 +103,3 @@ class Stripe_Form_Transactions {
         wp_send_json_success( $html );
     }
 }
-
-new Stripe_Form_Transactions();

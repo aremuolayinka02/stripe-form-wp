@@ -1,13 +1,16 @@
 <?php
+
 /**
  * Stripe integration class
  */
-class PFB_Stripe {
+class PFB_Stripe
+{
     private $stripe;
     private $initialized = false;
     private $errors = array();
 
-    public function __construct() {
+    public function __construct()
+    {
         try {
             // Check if vendor directory exists
             if (!file_exists(PFB_PLUGIN_DIR . 'vendor/autoload.php')) {
@@ -24,13 +27,13 @@ class PFB_Stripe {
             if (!class_exists('\Stripe\Stripe')) {
                 throw new Exception(
                     'Stripe PHP SDK not properly loaded. Please ensure the "stripe/stripe-php" library is installed and autoloaded. ' .
-                    'Check if the "vendor/autoload.php" file exists and is correctly included.'
+                        'Check if the "vendor/autoload.php" file exists and is correctly included.'
                 );
             }
 
             // Get API keys
             $test_mode = get_option('pfb_test_mode', true);
-            $secret_key = $test_mode 
+            $secret_key = $test_mode
                 ? get_option('pfb_test_secret_key')
                 : get_option('pfb_live_secret_key');
 
@@ -40,7 +43,7 @@ class PFB_Stripe {
 
             // Initialize Stripe
             \Stripe\Stripe::setApiKey($secret_key);
-            
+
             // Set app info
             \Stripe\Stripe::setAppInfo(
                 'Payment Form Builder',
@@ -49,22 +52,24 @@ class PFB_Stripe {
             );
 
             $this->initialized = true;
-
         } catch (Exception $e) {
             $this->errors[] = $e->getMessage();
             error_log('Payment Form Builder Stripe initialization error: ' . $e->getMessage());
         }
     }
 
-    public function is_ready() {
+    public function is_ready()
+    {
         return $this->initialized && empty($this->errors);
     }
 
-    public function get_errors() {
+    public function get_errors()
+    {
         return $this->errors;
     }
 
-    public function create_payment_intent($amount, $currency = 'usd') {
+    public function create_payment_intent($amount, $currency = 'usd', $form_id = 0)
+    {
         if (!$this->is_ready()) {
             return new WP_Error('stripe_not_ready', 'Stripe is not properly configured: ' . implode(', ', $this->errors));
         }
@@ -77,6 +82,9 @@ class PFB_Stripe {
             return \Stripe\PaymentIntent::create([
                 'amount' => (int)($amount * 100), // Convert to cents
                 'currency' => strtolower($currency),
+                'metadata' => [
+                    'form_id' => $form_id
+                ]
             ]);
         } catch (\Stripe\Exception\CardException $e) {
             return new WP_Error('stripe_card_error', $e->getMessage());
